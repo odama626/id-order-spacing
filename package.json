@@ -20,7 +20,10 @@
     "dev": "microbundle watch src/main.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "keywords": [
     "order",
     "spacing",
@@ -42,6 +45,7 @@
   "homepage": "https://github.com/odama626/id-order-spacing#readme",
   "packageManager": "pnpm@10.4.1",
   "devDependencies": {
-    "microbundle": "^0.15.1"
+    "microbundle": "^0.15.1",
+    "typescript": "^5.7.3"
   }
 }
