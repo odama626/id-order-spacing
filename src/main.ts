@@ -4,9 +4,14 @@ import {
   sortByMap,
 } from "./utils";
 
+interface Opts {
+  step?: number;
+  minimumStep?: number;
+}
+
 export function calculateUpdateFromMove<
   Type extends { id: string; order: number },
->(items: Type[], fromIndex: number, toIndex: number) {
+>(items: Type[], fromIndex: number, toIndex: number, opts: Opts = {}) {
   if (fromIndex === toIndex) return { changes: [], items };
 
   let item = items[fromIndex];
@@ -15,9 +20,12 @@ export function calculateUpdateFromMove<
     changes,
     items: newItems,
     item: newItem,
-  } = calculateInsert(filteredItems, item, toIndex);
+  } = calculateInsert(filteredItems, item, toIndex, opts);
 
-  changes.set(newItem.id, newItem.order);
+  if (!changes.has(newItem.id)) {
+    changes.set(newItem.id, newItem.order);
+  }
+
   return { changes, items: newItems };
 }
 
@@ -25,13 +33,15 @@ export function calculateInsert<Type extends { id: string; order: number }>(
   items: Type[],
   item: Type,
   index: number,
+  { step, minimumStep }: Opts = {},
 ) {
-  index ??= items.length - 1;
+  index ??= items.length;
 
   let order = getOrderAboveIndex(index, items);
   let upperCollision = index > 0 && order - items[index - 1]?.order < 5;
-  let lowerCollision =
-    index < items.length && items[index + 1]?.order - order < 5;
+  let lowerCollision = index < items.length && items[index]?.order - order < 5;
+
+  console.log({ lowerCollision, index, items });
 
   item.order = order;
 
@@ -41,7 +51,8 @@ export function calculateInsert<Type extends { id: string; order: number }>(
   let changes = new Map<string, number>();
 
   if (upperCollision || lowerCollision) {
-    changes = getMinimalSpacingChanges(newOrder, changes);
+    console.log({ changes, newOrder });
+    changes = getMinimalSpacingChanges(newOrder, changes, step, minimumStep);
     newOrder = sortByMap<Type>(newOrder, changes);
   }
 

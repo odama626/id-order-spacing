@@ -2,35 +2,41 @@
 
 A lightweight utility library for updating the ordering of items when they are moved within an array. This package calculates new order values and applies minimal spacing adjustments to ensure consistency and avoid collisions.
 
+---
+
+## What's New
+
+- Bugfixes and stability improvements.
+- `step` and `minimumStep` are now exposed for customization.
+- Improved `batchIterator` example.
+- Simplified insert-at-end pattern using `calculateInsert(items, newItem)`.
+
+---
+
 ## Overview
 
 This library offers two main functions for managing item order within an array: `calculateInsert` and `calculateUpdateFromMove`.
 
-- **calculateInsert** is used to insert an item into an array at a specific index, calculating a new order value and adjusting spacing if needed.
-- **calculateUpdateFromMove** leverages `calculateInsert` to handle the case where an item is moved from one index to another within an existing array.  
-  Both functions ensure that order collisions are avoided by checking the spacing between adjacent items (using a threshold of less than 5) and applying minimal changes when necessary.
+- **calculateInsert** is used to insert an item into an array at a specific index (or at the end if no index is provided), calculating a new order value and adjusting spacing if needed.
+- **calculateUpdateFromMove** moves an item from one index to another within an existing array, ensuring minimal disruption to the overall order while avoiding collisions.
 
-This solution is particularly useful when storing a sorted array inside a database. By assigning each record an `order` value, you can simply query the database and sort by this field to retrieve the items in the correct order. When an item is inserted or moved, the library computes new order values only for the affected items, which minimizes database write operations and improves efficiency.
+This is particularly useful when storing sorted arrays in a database where frequent insertions and moves occur. The library minimizes database writes by only updating order values that require adjustment.
+
+---
 
 ## Installation
 
-You can install the package using your favorite package manager. For example, using pnpm:
-
 ```bash
 pnpm install @sparkstone/id-order-spacing
-```
-
-Or with npm:
-
-```bash
+# or
 npm install @sparkstone/id-order-spacing
 ```
 
+---
+
 ## Usage
 
-### Example: calculateInsert
-
-Below is an example of how to use `calculateInsert` to insert an item into a pre-sorted array:
+### Simple Insert (including append)
 
 ```typescript
 import { calculateInsert } from "@sparkstone/id-order-spacing";
@@ -40,142 +46,130 @@ interface Item {
   order: number;
 }
 
-// Items must be sorted in ascending order by the order property.
 const items: Item[] = [
   { id: "a", order: 100 },
   { id: "b", order: 200 },
   { id: "c", order: 300 },
 ];
 
-const newItem: Item = { id: "d", order: 0 }; // The order will be calculated
-const insertIndex = 1;
+const newItem: Item = { id: "d", order: 0 }; // order will be calculated
 
-const { changes, items: newItems } = calculateInsert(
-  items,
-  newItem,
-  insertIndex,
-);
+// Insert at index 1
+const result1 = calculateInsert(items, newItem, 1);
 
-console.log("Updated Items:", newItems);
-console.log("Changes:", changes);
-/*
-  Expected output:
-  {
-    changes: Map { ... }, // Items that needed spacing adjustments
-    items: [ { id: "a", order: 100 },
-             { id: "d", order: <new order> },
-             { id: "b", order: 200 },
-             { id: "c", order: 300 } ]
-  }
-*/
+// Or insert at the end
+const result2 = calculateInsert(items, newItem);
+
+console.log(result2.items); // d gets placed after c
+
+// After insertion:
+// 1. Insert result2.item into the database (order already assigned)
+await db.create(result2.item);
+
+// 2. Iterate over `result2.changes` and update affected items in the database.
+for (const [id, order] of result2.changes.entries()) {
+  await db.update(id, { order });
+}
 ```
 
-### Example: calculateUpdateFromMove
-
-The `calculateUpdateFromMove` function is typically used when an existing item is moved to a new position within the array. Internally, it removes the item from its original position and reinserts it using the logic of `calculateInsert`.
+### Moving Items
 
 ```typescript
-import { calculateUpdateFromMove } from "@sparkstone/id-order-spacing";
+import {
+  calculateUpdateFromMove,
+  batchIterator,
+} from "@sparkstone/id-order-spacing";
 
-interface Item {
-  id: string;
-  order: number;
-}
+const result = calculateUpdateFromMove(unwrap(executors()), fromIndex, toIndex);
 
-// Items must be sorted in ascending order by the order property.
-const items: Item[] = [
-  { id: "a", order: 100 },
-  { id: "b", order: 200 },
-  { id: "c", order: 300 },
-];
-
-const fromIndex = 0;
-const toIndex = 2;
-
-const result = calculateUpdateFromMove(items, fromIndex, toIndex);
-
-console.log("Updated Items:", result.items);
-console.log("Changes:", result.changes);
-/*
-  Expected output:
-  {
-    changes: Map { 'a' => <new order> },
-    items: [ <updated items array sorted by new order values> ]
+for (const subset of batchIterator(result.changes.entries(), 10)) {
+  const batch = db.createBatch();
+  for (const [id, order] of subset) {
+    batch.update(id, { order });
   }
-*/
+  await batch.send();
+}
 ```
+
+---
 
 ## API
 
-### `calculateInsert<T>(items: T[], item: T, index: number)`
+### `calculateInsert<T>(items: T[], item: T, index?: number, opts?: { step?: number, minimumStep?: number })`
 
-- **Parameters:**
-  - `items`: An array of items where each item is an object with an `id` (string) and an `order` (number). **Note:** The items must be sorted in ascending order based on the `order` property.
-  - `item`: The item to insert. The `order` property will be updated.
-  - `index`: The target index where the item should be inserted.
-- **Returns:**  
-  An object containing:
-  - `changes`: A `Map<string, number>` mapping item IDs to their new order values if any spacing adjustments were necessary.
-  - `items`: The updated array of items.
-  - `item`: The inserted item (with its updated order value).
+- `items`: sorted array of items with `{ id: string; order: number }`
+- `item`: the item to insert (its `order` will be assigned)
+- `index`: optional index; if omitted, inserts at the end
+- `opts`: optional object to override default `step` and `minimumStep`
+- **Returns:** `{ changes, items, item }`
 
-### `calculateUpdateFromMove<T>(items: T[], fromIndex: number, toIndex: number)`
+### `calculateUpdateFromMove<T>(items: T[], fromIndex: number, toIndex: number, opts?: { step?: number, minimumStep?: number })`
 
-- **Parameters:**
-  - `items`: An array of items where each item is an object with an `id` (string) and an `order` (number). **Note:** The items must be sorted in ascending order based on the `order` property.
-  - `fromIndex`: The current index of the item being moved.
-  - `toIndex`: The target index where the item should be inserted.
-- **Returns:**  
-  An object containing:
-  - `changes`: A `Map<string, number>` mapping item IDs to their new order values.
-  - `items`: The updated array of items sorted by the new order values.
+- Moves an item and returns `{ changes, items }`
+- If `fromIndex === toIndex`, returns empty changes.
+- `opts`: optional object to override default `step` and `minimumStep`
 
-_If `fromIndex` equals `toIndex`, the function returns an object with an empty `changes` array and the original items array._
+### `step` and `minimumStep`
 
-## Advanced Usage: Batch Iterator
-
-The package also provides a `batchIterator` function which can be useful for processing large sets of items in batches. This generator function accepts an iterator and a batch size, yielding arrays of items in each batch. This can be particularly beneficial when applying changes in environments where processing or database updates need to be chunked.
+These constants are exposed for advanced use:
 
 ```typescript
-import { batchIterator } from "@sparkstone/id-order-spacing";
+import { step, minimumStep } from "@sparkstone/id-order-spacing";
 
-function* numbersGenerator() {
-  for (let i = 0; i < 100; i++) {
-    yield i;
+console.log(step); // Default spacing step size (e.g. 100)
+console.log(minimumStep); // Minimum gap before rebalance triggers (e.g. 5)
+```
+
+---
+
+## Updated Batch Iterator Example
+
+```typescript
+import {
+  calculateUpdateFromMove,
+  batchIterator,
+} from "@sparkstone/id-order-spacing";
+
+const result = calculateUpdateFromMove(unwrap(executors()), fromIndex, toIndex);
+
+for (const subset of batchIterator(result.changes.entries(), 10)) {
+  const batch = db.createBatch();
+  for (const [id, order] of subset) {
+    batch.update(id, { order });
   }
-}
-
-for (const batch of batchIterator(numbersGenerator(), 10)) {
-  console.log(batch);
-  // Process each batch (e.g., update in database)
+  await batch.send();
 }
 ```
 
+---
+
 ## Database Use Case
 
-This library is especially beneficial when you need to store a sorted array of items in a database. By maintaining an `order` field on each record, you can perform a simple sort in your query to retrieve the items in the correct order. When an item is inserted or moved, the functions compute new order values only for the affected items. This results in minimal record changes, meaning you only update the records that have changed. This efficiency is crucial for applications with large datasets or frequent reordering operations.
+By assigning `order` values and using these functions, you minimize write operations when inserting or moving items in database-backed lists. After each operation:
 
-## Build Process
+- Insert the new item with its assigned `order` (returned as `result.item`).
+- Apply any changes listed in the `changes` map by updating affected records.
+- Use `batchIterator` to efficiently batch updates if your database supports batch writes.
 
-This package uses [microbundle](https://github.com/developit/microbundle) for bundling. To build the package, run:
+This minimizes the number of writes required to keep your ordering stable and avoids unnecessary updates.
+
+---
+
+## Build
 
 ```bash
 pnpm run build
 ```
 
-This command compiles the TypeScript source (located at `src/main.ts`) and produces the bundled output (typically in `dist/index.js`).
+---
 
-## Repository & Contribution
+## Repository
 
-The source code is hosted on GitHub. Feel free to browse the repository, open issues, or contribute improvements.
+- GitHub: [https://github.com/odama626/id-order-spacing](https://github.com/odama626/id-order-spacing)
+- Issues: [https://github.com/odama626/id-order-spacing/issues](https://github.com/odama626/id-order-spacing/issues)
 
-- **GitHub:** [https://github.com/odama626/id-order-spacing](https://github.com/odama626/id-order-spacing)
-- **Issues:** [https://github.com/odama626/id-order-spacing/issues](https://github.com/odama626/id-order-spacing/issues)
+---
 
 ## License
 
-This project is licensed under the MIT License.
-
-```
-
-```
+MIT

@@ -1,6 +1,6 @@
 {
   "name": "@sparkstone/id-order-spacing",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A lightweight utility library for calculating minimal spacing changes when reordering items in a sorted array.",
   "type": "module",
   "source": "src/main.ts",
@@ -18,7 +18,7 @@
   "scripts": {
     "build": "microbundle src/main.ts --generateTypes",
     "dev": "microbundle watch src/main.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest"
   },
   "files": ["dist", "README.md"],
   "keywords": [
@@ -43,6 +43,7 @@
   "packageManager": "pnpm@10.4.1",
   "devDependencies": {
     "microbundle": "^0.15.1",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
   }
 }

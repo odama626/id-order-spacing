@@ -25,6 +25,7 @@ export function getMinimalSpacingChanges(
   items: OrderedItem[],
   itemMap?: Map<string, number>,
   delta = 10_000,
+  minimumDelta = 5,
 ) {
   itemMap = itemMap || new Map<string, number>();
   let workingItems = structuredClone(items);
@@ -34,19 +35,23 @@ export function getMinimalSpacingChanges(
     if (i === 0) {
       workingItems[i].order = (workingItems[i].order / 2) | 0;
       let order = getOrderAboveIndex(i + 1, workingItems);
-      workingItems[i].order = order;
-      itemMap.set(workingItems[i].id, order);
+      if (workingItems[i].order !== order) {
+        workingItems[i].order = order;
+        itemMap.set(workingItems[i].id, order);
+      }
     }
     if (i === workingItems.length - 2) {
-      workingItems[i + 1].order += delta;
-      itemMap.set(workingItems[i + 1].id, workingItems[i + 1].order);
+      if (delta > 0) {
+        workingItems[i + 1].order += delta;
+        itemMap.set(workingItems[i + 1].id, workingItems[i + 1].order);
+      }
       continue;
     }
     let k = i + 1;
 
     while (
       k < workingItems.length - 1 &&
-      workingItems[k].order - workingItems[i].order < 5
+      workingItems[k].order - workingItems[k - 1].order < minimumDelta
     ) {
       k++;
     }
@@ -57,14 +62,21 @@ export function getMinimalSpacingChanges(
     let step = ((upperLimit - lowerLimit) / (k - i)) | 0;
 
     for (let j = i; j <= k; j++) {
-      workingItems[j].order = lowerLimit + (j - i) * step;
-      itemMap.set(workingItems[j].id, workingItems[j].order);
+      let newOrder = lowerLimit + (j - i) * step;
+      if (workingItems[j].order !== newOrder) {
+        workingItems[j].order = newOrder;
+        itemMap.set(workingItems[j].id, newOrder);
+      }
     }
     i = k - 1;
   }
 
   if (workingItems[0].order === 0) {
-    itemMap.set(workingItems[0].id, (workingItems[1].order / 2) | 0);
+    let newOrder = (workingItems[1].order / 2) | 0;
+    if (newOrder !== workingItems[0].order) {
+      workingItems[0].order = newOrder;
+      itemMap.set(workingItems[0].id, newOrder);
+    }
   }
 
   return itemMap;
