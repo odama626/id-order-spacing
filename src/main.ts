@@ -41,8 +41,6 @@ export function calculateInsert<Type extends { id: string; order: number }>(
   let upperCollision = index > 0 && order - items[index - 1]?.order < 5;
   let lowerCollision = index < items.length && items[index]?.order - order < 5;
 
-  console.log({ lowerCollision, index, items });
-
   item.order = order;
 
   let newOrder = items.slice();
@@ -51,7 +49,6 @@ export function calculateInsert<Type extends { id: string; order: number }>(
   let changes = new Map<string, number>();
 
   if (upperCollision || lowerCollision) {
-    console.log({ changes, newOrder });
     changes = getMinimalSpacingChanges(newOrder, changes, step, minimumStep);
     newOrder = sortByMap<Type>(newOrder, changes);
   }
